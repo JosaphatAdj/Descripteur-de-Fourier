@@ -16,7 +16,7 @@ OBJ_DIR = obj
 LIB_DIR = ../python/lib
 
 # Fichiers sources
-SOURCES = fourier_naive.c fourier_openblas.c contour.c utils.c
+SOURCES = fourier_naive.c fourier_openblas.c contour.c utils.c batch.c
 OBJECTS = $(patsubst %.c,$(OBJ_DIR)/%.o,$(SOURCES))
 
 # Bibliothèque partagée

@@ -181,6 +181,47 @@ double norm_openblas(const double* x, int n);
 
 
 /* ============================================================
+ * OPÉRATIONS BATCH (BLAS Level 3)
+ * ============================================================ */
+
+/**
+ * Pré-calcule la matrice de Transformation de Fourier (W).
+ * W est une matrice (n_coeffs x n_points) de complexes.
+ * W[n, k] = (1/N) * exp(-i * 2*pi * n * k / N)
+ * 
+ * @param n_points Nombre de points par contour
+ * @param n_coeffs Nombre de coefficients à conserver
+ * @return Pointeur vers la matrice (allouée dynamiquement)
+ */
+double complex* precompute_dft_matrix(int n_points, int n_coeffs);
+
+/**
+ * Calcule les descripteurs pour un lot de contours en une seule opération (GEMM).
+ * 
+ * @param contours_batch Matrice de contours (batch_size x n_points). 
+ *                       Stocké comme (batch_size * n_points) points contigus.
+ * @param batch_size     Nombre de contours
+ * @param n_points       Nombre de points par contour
+ * @param dft_matrix     Matrice DFT pré-calculée (n_coeffs x n_points)
+ * @param n_coeffs       Nombre de coefficients (lignes de dft_matrix)
+ * @param output_coeffs  Buffer de sortie (batch_size x n_coeffs). 
+ */
+void fourier_batch_gemm(
+    const double complex* contours_batch, 
+    int batch_size, 
+    int n_points,
+    const double complex* dft_matrix, 
+    int n_coeffs,
+    double complex* output_coeffs
+);
+
+/**
+ * Libère la matrice DFT.
+ */
+void free_dft_matrix(double complex* matrix);
+
+
+/* ============================================================
  * UTILITAIRES
  * ============================================================ */
 

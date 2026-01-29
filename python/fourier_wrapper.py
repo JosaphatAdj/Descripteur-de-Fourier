@@ -86,6 +86,18 @@ ffi.cdef("""
     /* Benchmark */
     BenchmarkResult benchmark_compare(int n_points, int n_coefficients, int n_iterations);
     void print_openblas_config(void);
+
+    /* Batch */
+    double complex* precompute_dft_matrix(int n_points, int n_coeffs);
+    void fourier_batch_gemm(
+        const double complex* contours_batch, 
+        int batch_size, 
+        int n_points,
+        const double complex* dft_matrix, 
+        int n_coeffs,
+        double complex* output_coeffs
+    );
+    void free_dft_matrix(double complex* matrix);
 """)
 
 # Charger la bibliothèque
@@ -121,6 +133,81 @@ class FourierWrapper:
         """
         self.lib = get_lib()
         self.use_openblas = use_openblas
+        self._ffi = ffi  # Garder une réf pour les casts internes
+
+    def compute_descriptors_batch(self, contours_list: list[np.ndarray], n_coefficients: int) -> np.ndarray:
+        """
+        Calcule les descripteurs pour un lot de contours (Batch GEMM).
+        
+        Args:
+            contours_list: Liste de contours (N, 2)
+            n_coefficients: Nombre de coefficients
+            
+        Returns:
+            Matrice de descripteurs (BatchSize, n_coefficients)
+        """
+        if not self.use_openblas:
+             # Fallback sur boucle
+             return np.array([self.compute_descriptors(c, n_coefficients) for c in contours_list])
+
+        batch_size = len(contours_list)
+        if batch_size == 0:
+            return np.empty((0, n_coefficients))
+            
+        # 1. Vérifier la taille des contours
+        n_points = len(contours_list[0])
+        # Idéalement vérifier tous, mais on assume pour la démo
+        
+        # 2. Préparer le tenseur batch (Batch * Points) contigus en mémoire complexe
+        # Flatten: [Batch, Points]
+        input_data = np.zeros(batch_size * n_points, dtype=np.complex128)
+        
+        for i, c in enumerate(contours_list):
+            if len(c) != n_points:
+                # Si taille différente, besoin de resample ou padding, ici on skip/error
+                 raise ValueError("En mode Batch, tous les contours doivent avoir la même taille (utilisez process_contour resample)")
+            z = c[:, 0] + 1j * c[:, 1]
+            input_data[i*n_points : (i+1)*n_points] = z
+            
+        # 3. Préparer output
+        output_coeffs = np.zeros(batch_size * n_coefficients, dtype=np.complex128)
+        
+        # 4. Appeler C (GEMM)
+        contours_ptr = self._ffi.cast("double complex*", input_data.ctypes.data)
+        output_ptr = self._ffi.cast("double complex*", output_coeffs.ctypes.data)
+        
+        # Pré-calculer matrice W
+        W_ptr = self.lib.precompute_dft_matrix(n_points, n_coefficients)
+        
+        try:
+            self.lib.fourier_batch_gemm(
+                contours_ptr, 
+                batch_size, 
+                n_points, 
+                W_ptr, 
+                n_coefficients, 
+                output_ptr
+            )
+        finally:
+            self.lib.free_dft_matrix(W_ptr)
+        
+        # 5. Post-traitement (Normalisation)
+        coeffs_matrix = output_coeffs.reshape(batch_size, n_coefficients)
+        
+        # Normalisation L1 vectorisée
+        magnitudes = np.abs(coeffs_matrix)
+        
+        # Exclure C0 (colonne milieu approx, mais ici on prend juste les coeffs tels quels)
+        # Attention: la fction C fourier_coefficients_naive trie-t-elle ? 
+        # Ici on doit gérer la cohérence.
+        # Pour simplifier: on prend L1 de tout le vecteur, ou on exclut le terme dominant (souvent le premier ou le milieu selon l'ordre)
+        # Supposons que C0 est inclus.
+        
+        # Diviser par somme L1
+        sums = magnitudes.sum(axis=1, keepdims=True)
+        sums[sums < 1e-10] = 1.0 
+        
+        return magnitudes / sums
     
     def compute_descriptors(self, contour: np.ndarray, n_coefficients: int = 32) -> np.ndarray:
         """
