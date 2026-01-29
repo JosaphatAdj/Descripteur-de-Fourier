@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  fourier:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openblas-fourier
+    volumes:
+      - .:/app
+    environment:
+      - OPENBLAS_NUM_THREADS=4
+      - OMP_NUM_THREADS=4
+      - PYTHONUNBUFFERED=1
+    working_dir: /app
+    command: [ "python", "python/main.py" ]
+
+  benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openblas-benchmark
+    volumes:
+      - .:/app
+    environment:
+      - OPENBLAS_NUM_THREADS=4
+      - OMP_NUM_THREADS=4
+    working_dir: /app
+    command: [ "python", "python/benchmarks/run_benchmarks.py" ]
+    profiles:
+      - benchmark
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openblas-test
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: [ "bash", "-c", "cd c_src && ./test_fourier" ]
+    profiles:
+      - test

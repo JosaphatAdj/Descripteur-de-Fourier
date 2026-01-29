@@ -1,0 +1,30 @@
+# ==============================================
+# Python: Wrappers et Visualisation uniquement
+# La logique est en C avec OpenBLAS
+# ==============================================
+
+# Interface C/Python
+cffi>=1.16.0
+numpy>=1.24.0
+
+# Visualisation
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Traitement d'image (chargement uniquement)
+opencv-python-headless>=4.8.0
+Pillow>=10.0.0
+
+# Benchmarking
+tqdm>=4.65.0
+pandas>=2.0.0
+
+# Jupyter (optionnel)
+jupyter>=1.0.0
+
+# Analyse
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# Tests
+pytest>=7.4.0

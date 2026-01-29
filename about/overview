@@ -1,0 +1,149 @@
+# **Plan Révisé : Optimisation des Descripteurs de Fourier avec OpenBLAS**
+
+## **Structure du Rapport**
+
+---
+
+### **Chapitre 1 : Introduction**
+1.1. Contexte général : analyse de formes par descripteurs de Fourier  
+1.2. Problématique : besoin de performance en temps réel pour applications industrielles  
+1.3. Objectif : évaluer l'apport d'OpenBLAS dans le calcul des descripteurs  
+1.4. Méthodologie : implémentation comparative avec/sans OpenBLAS  
+
+### **Chapitre 2 : Fondements Mathématiques des Descripteurs de Fourier**
+2.1. Représentation paramétrique des contours  
+2.2. Coefficients de Fourier complexes  
+2.3. Normalisation pour invariance géométrique  
+2.4. Descripteurs fréquentiels comme signature de forme  
+
+### **Chapitre 3 : OpenBLAS - Architecture et Performances**
+3.1. Présentation d'OpenBLAS et BLAS/LAPACK  
+3.2. Optimisations matérielles (SIMD, cache, parallélisme)  
+3.3. Installation et configuration pour applications scientifiques  
+3.4. Cas d'utilisation typiques en traitement d'image  
+
+### **Chapitre 4 : Implémentation des Algorithmes**
+4.1. Design de l'expérimentation  
+4.2. Implémentation naïve (sans optimisation)  
+4.3. Implémentation optimisée avec OpenBLAS  
+4.4. Intégration dans le pipeline de traitement  
+
+### **Chapitre 5 : Évaluation Expérimentale**
+5.1. Jeu de données : formes géométriques synthétiques et réelles  
+5.2. Protocole de test et métriques  
+5.3. Résultats de performance (temps de calcul)  
+5.4. Analyse de la scalabilité (nombre de points, nombre de formes)  
+
+### **Chapitre 6 : Analyse et Perspectives OpenBLAS**
+6.1. Gains obtenus : accélération, utilisation mémoire  
+6.2. Limites identifiées : overhead, configuration optimale  
+6.3. Améliorations possibles : tuning pour cas d'usage spécifique  
+6.4. Intégration avec autres bibliothèques (FFTW, MKL)  
+
+### **Chapitre 7 : Conclusion**
+7.1. Synthèse des résultats  
+7.2. Pertinence d'OpenBLAS pour l'analyse de formes  
+7.3. Recommandations pour développeurs  
+7.4. Extensions futures  
+
+---
+
+## **Structure de la Présentation Beamer (15 minutes)**
+
+### **Slide 1 : Titre**  
+Optimisation du Calcul des Descripteurs de Fourier avec OpenBLAS
+
+### **Slide 2 : Problématique**  
+- Analyse de formes : besoin de performance  
+- Descripteurs de Fourier : calculs intensifs  
+- OpenBLAS comme solution d'accélération  
+
+### **Slide 3 : Descripteurs de Fourier (Essentiel)**  
+- Contour → série de Fourier complexe  
+- Coefficients normalisés  
+- Invariance translation/rotation/échelle  
+
+### **Slide 4 : OpenBLAS en bref**  
+- BLAS/LAPACK open source optimisé  
+- Support multi-architecture  
+- Facile à intégrer  
+
+### **Slide 5 : Implémentation**  
+- Version naïve vs version OpenBLAS  
+- Points clés d'optimisation  
+- Interface Python/C  
+
+### **Slide 6 : Expérimentation**  
+- Jeu de données (formes géométriques)  
+- Métriques : temps de calcul, accélération  
+- Tests de scalabilité  
+
+### **Slide 7 : Résultats Performance**  
+- Tableau comparatif d'accélération  
+- Graphique : temps vs nombre de points  
+- Impact du nombre de formes  
+
+### **Slide 8 : Gains OpenBLAS**  
+- Accélération 5-50× selon configuration  
+- Meilleure utilisation CPU  
+- Scalabilité linéaire  
+
+### **Slide 9 : Limitations**  
+- Overhead pour petits problèmes  
+- Configuration spécifique nécessaire  
+- Dépendance architecture  
+
+### **Slide 10 : Améliorations OpenBLAS**  
+- Tuning pour FFT et opérations vectorielles  
+- Combinaison avec FFTW  
+- Optimisation mémoire  
+
+### **Slide 11 : Code Critique**  
+- Extrait clé d'implémentation  
+- Points d'intégration OpenBLAS  
+- Mesures de performance  
+
+### **Slide 12 : Conclusion**  
+- OpenBLAS efficace pour descripteurs de Fourier  
+- Accélération significative  
+- Recommandations d'usage  
+
+### **Slide 13 : Questions**  
+---
+
+## **Focus sur l'Essentiel**
+
+### **Partie Mathématique (uniquement l'essentiel)** :
+- Formule des coefficients : `c_n = (1/N) Σ z_k e^{-i2πnk/N}`
+- Normalisation : `FD_k = |c_k|/|c_1|`
+- Distance entre formes : `d = Σ |FD1_k - FD2_k|^2`
+
+### **Partie OpenBLAS (le cœur)** :
+- BLAS Level 1 : opérations vectorielles (`ddot`, `dnrm2`)
+- Intégration dans les calculs de normes et produits scalaires
+- Comparaison brute de performance
+
+### **Partie Gains/Limites/Perspectives (basé sur OpenBLAS)** :
+
+**Gains** :
+- Accélération des produits scalaires (normes, distances)
+- Meilleure utilisation des instructions SIMD
+- Réduction du temps de calcul pour batch processing
+
+**Limites** :
+- Overhead pour petits vecteurs (<100 éléments)
+- Configuration manuelle nécessaire pour performance optimale
+- Performances variables selon architecture CPU
+
+**Perspectives** :
+- Auto-tuning pour l'analyse de formes
+- Combinaison avec d'autres bibliothèques (FFTW pour FFT)
+- Développement de wrappers spécialisés pour le traitement d'image
+
+### **Validation Simple** :
+- Télécharger images de formes géométriques (MPEG-7 dataset)
+- Implémenter 2 versions : avec/sans OpenBLAS
+- Mesurer temps d'exécution pour différentes tailles
+- Présenter ratio d'accélération
+
+Ce plan se concentre sur **l'apport d'OpenBLAS** dans le calcul des descripteurs de Fourier, avec juste assez de théorie pour comprendre le contexte, et une évaluation technique centrée sur les performances.
