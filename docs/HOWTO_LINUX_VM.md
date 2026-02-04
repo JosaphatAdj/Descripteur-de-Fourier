@@ -43,7 +43,18 @@ cd ..
 python3 setup.py build_ext --inplace
 ```
 
-Cela génère `fourier_wrapper.*.so` (l'extension Python compilée avec support des types complexes).
+Cela génère `fourier_wrapper.*.so` dans `build/`. Copiez-le dans `python/` :
+
+```bash
+find . -name "fourier_wrapper*.so" -type f
+cp build/lib.linux-x86_64-cpython-*/fourier_wrapper*.so python/
+```
+
+Vérifiez que le module s'importe correctement :
+
+```bash
+python3 -c "from python.fourier_wrapper import FourierWrapper; print('✓ Module chargé')"
+```
 
 ## 5. Exécution des Scripts
 Lancez les scripts Python.
