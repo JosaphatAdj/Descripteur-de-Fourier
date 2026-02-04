@@ -259,38 +259,45 @@ def load_dataset(data_dir: str) -> Tuple[List[np.ndarray], List[np.ndarray],
     Charge le dataset de casting.
     
     Args:
-        data_dir: Chemin vers data/casting/
+        data_dir: Chemin vers data/casting/ ou data/originaux/
         
     Returns:
         (contours_ok, contours_def, files_ok, files_def)
     """
     data_path = Path(data_dir)
     
-    ok_dir = data_path / "ok_front"
-    def_dir = data_path / "def_front"
+    ok_dir = data_path / "ok"
+    def_dir = data_path / "def"
     
     contours_ok = []
     contours_def = []
     files_ok = []
     files_def = []
     
+    # Extensions d'image supportées
+    image_extensions = ['*.jpeg', '*.jpg', '*.png', '*.bmp', '*.tif', '*.tiff']
+    
     # Charger les pièces OK
-    for img_path in sorted(ok_dir.glob("*.jpeg")):
-        try:
-            contour = process_image_to_contour(str(img_path))
-            contours_ok.append(contour)
-            files_ok.append(img_path.name)
-        except Exception as e:
-            print(f"⚠ Erreur {img_path.name}: {e}")
+    if ok_dir.exists():
+        for ext in image_extensions:
+            for img_path in sorted(ok_dir.glob(ext)):
+                try:
+                    contour = process_image_to_contour(str(img_path))
+                    contours_ok.append(contour)
+                    files_ok.append(img_path.name)
+                except Exception as e:
+                    print(f"⚠ Erreur {img_path.name}: {e}")
     
     # Charger les pièces défectueuses
-    for img_path in sorted(def_dir.glob("*.jpeg")):
-        try:
-            contour = process_image_to_contour(str(img_path))
-            contours_def.append(contour)
-            files_def.append(img_path.name)
-        except Exception as e:
-            print(f"⚠ Erreur {img_path.name}: {e}")
+    if def_dir.exists():
+        for ext in image_extensions:
+            for img_path in sorted(def_dir.glob(ext)):
+                try:
+                    contour = process_image_to_contour(str(img_path))
+                    contours_def.append(contour)
+                    files_def.append(img_path.name)
+                except Exception as e:
+                    print(f"⚠ Erreur {img_path.name}: {e}")
     
     print(f"✓ Chargé: {len(contours_ok)} OK, {len(contours_def)} DEF")
     

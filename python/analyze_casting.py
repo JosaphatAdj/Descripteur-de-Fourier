@@ -361,14 +361,14 @@ def visualize_results(results: Dict):
             'type': 'OK',
             'file': results['files_ok'][i],
             'desc': results['descriptors_ok'][i],
-            'path': DATA_DIR / 'ok_front' / results['files_ok'][i]
+            'path': DATA_DIR / 'ok' / results['files_ok'][i]
         })
     for i in indices_def:
         samples.append({
             'type': 'DEF',
             'file': results['files_def'][i],
             'desc': results['descriptors_def'][i],
-            'path': DATA_DIR / 'def_front' / results['files_def'][i]
+            'path': DATA_DIR / 'def' / results['files_def'][i]
         })
         
     fig3, axes = plt.subplots(4, 3, figsize=(15, 16))

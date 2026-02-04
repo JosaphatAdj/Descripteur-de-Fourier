@@ -53,32 +53,11 @@ ffi.cdef("""
     FourierDescriptors* descriptors_create(size_t n);
     void descriptors_free(FourierDescriptors* desc);
     
-    /* Fonctions naïves */
-    int fourier_coefficients_naive(
-        const Contour* contour,
-        double complex* coefficients,
-        int n_coefficients
-    );
-    int normalize_descriptors_naive(
-        const double complex* coefficients,
-        int n_coefficients,
-        double* descriptors
-    );
-    double distance_naive(const double* desc1, const double* desc2, int n);
-    double dot_product_naive(const double* x, const double* y, int n);
-    double norm_naive(const double* x, int n);
     
-    /* Fonctions OpenBLAS */
-    int fourier_coefficients_openblas(
-        const Contour* contour,
-        double complex* coefficients,
-        int n_coefficients
-    );
-    int normalize_descriptors_openblas(
-        const double complex* coefficients,
-        int n_coefficients,
-        double* descriptors
-    );
+    /* Note: Fourier coefficient functions use complex types internally
+       but are not directly exposed via CFFI. Use Python wrapper methods. */
+    
+    /* Distance and norms (real-valued, safe for CFFI) */
     double distance_openblas(const double* desc1, const double* desc2, int n);
     double dot_product_openblas(const double* x, const double* y, int n);
     double norm_openblas(const double* x, int n);
@@ -87,17 +66,8 @@ ffi.cdef("""
     BenchmarkResult benchmark_compare(int n_points, int n_coefficients, int n_iterations);
     void print_openblas_config(void);
 
-    /* Batch */
-    double complex* precompute_dft_matrix(int n_points, int n_coeffs);
-    void fourier_batch_gemm(
-        const double complex* contours_batch, 
-        int batch_size, 
-        int n_points,
-        const double complex* dft_matrix, 
-        int n_coeffs,
-        double complex* output_coeffs
-    );
-    void free_dft_matrix(double complex* matrix);
+    /* Note: Batch functions with complex types are not exposed via CFFI
+       due to CFFI limitations. Use Python fallback for batch processing. */
 """)
 
 # Charger la bibliothèque
@@ -173,8 +143,8 @@ class FourierWrapper:
         output_coeffs = np.zeros(batch_size * n_coefficients, dtype=np.complex128)
         
         # 4. Appeler C (GEMM)
-        contours_ptr = self._ffi.cast("double complex*", input_data.ctypes.data)
-        output_ptr = self._ffi.cast("double complex*", output_coeffs.ctypes.data)
+        contours_ptr = self._ffi.cast("_Complex double*", input_data.ctypes.data)
+        output_ptr = self._ffi.cast("_Complex double*", output_coeffs.ctypes.data)
         
         # Pré-calculer matrice W
         W_ptr = self.lib.precompute_dft_matrix(n_points, n_coefficients)
@@ -235,7 +205,7 @@ class FourierWrapper:
         try:
             # Allouer les coefficients
             coefficients = np.zeros(n_coefficients + 1, dtype=np.complex128)
-            coeffs_ptr = ffi.cast("double complex*", coefficients.ctypes.data)
+            coeffs_ptr = ffi.cast("_Complex double*", coefficients.ctypes.data)
             
             # Allouer les descripteurs
             descriptors = np.zeros(n_coefficients, dtype=np.float64)

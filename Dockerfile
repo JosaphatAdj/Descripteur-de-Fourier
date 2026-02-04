@@ -55,5 +55,10 @@ COPY . .
 # ============================================================
 RUN cd /app/c_src && make clean && make all
 
+# ============================================================
+# COMPILATION DE L'EXTENSION CYTHON
+# ============================================================
+RUN cd /app && python setup.py build_ext --inplace
+
 # Point d'entrée par défaut
-CMD ["python", "python/main.py"]
+CMD ["python", "python/analyze_casting.py"]

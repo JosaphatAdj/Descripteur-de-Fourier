@@ -17,7 +17,7 @@ Installez les paquets requis. Si vous êtes dans un environnement virtuel (recom
 python3 -m venv venv
 source venv/bin/activate
 
-# Installer
+# Installer (inclut Cython)
 pip install -r requirements.txt
 ```
 
@@ -35,23 +35,38 @@ make
 Cela doit générer le fichier `../python/lib/libfourier.so`.
 Vous devriez voir : `✓ Compilation terminée`.
 
-## 4. Exécution des Scripts
-Revenez à la racine du projet et lancez les scripts Python.
+## 4. Compilation de l'Extension Cython
+Retournez à la racine et compilez le wrapper Cython :
 
-### Benchmark Batch Processing (Nouveau)
 ```bash
 cd ..
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/python/lib
-python3 python/benchmarks/benchmark_batch.py
+python3 setup.py build_ext --inplace
 ```
-*Note : L'export LD_LIBRARY_PATH aide parfois si le .so n'est pas trouvé, bien que le wrapper Python utilise un chemin absolu.*
+
+Cela génère `fourier_wrapper.*.so` (l'extension Python compilée avec support des types complexes).
+
+## 5. Exécution des Scripts
+Lancez les scripts Python.
 
 ### Analyse Casting (Défauts)
 ```bash
 python3 python/analyze_casting.py
 ```
 
+### Benchmark Batch Processing (GEMM)
+```bash
+python3 python/benchmarks/benchmark_batch.py
+```
+
 ### Tests Unitaires
 ```bash
 pytest
 ```
+
+---
+
+## Troubleshooting
+
+**Erreur "cannot find -lfourier"** : La bibliothèque C n'a pas été compilée. Retournez à l'étape 3.
+
+**Import error sur fourier_wrapper** : L'extension Cython n'a pas été compilée ou est dans le mauvais dossier. L'exécuter depuis la racine du projet résout souvent le problème.
