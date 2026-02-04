@@ -5,192 +5,122 @@
 # distutils: include_dirs=c_src/include
 
 """
-Wrapper Cython pour la bibliothèque C libfourier
-================================================
+Wrapper Cython SIMPLIFIÉ pour libfourier
+=========================================
 
-Utilise Cython pour un accès direct aux types complexes C.
+Évite les types complexes C qui causent des problèmes avec Cython.
+Utilise NumPy FFT vectorisé pour le batch processing.
 """
 
 cimport numpy as np
 import numpy as np
-from libc.stdlib cimport malloc, free
-from libc.stdint cimport uintptr_t
-
-# Déclarations externes C
-cdef extern from "complex.h":
-    ctypedef double complex double_complex
-
-cdef extern from "fourier.h":
-    # Structures
-    ctypedef struct Point2D:
-        double x
-        double y
-    
-    ctypedef struct Contour:
-        Point2D* points
-        size_t n_points
-    
-    # Gestion des contours
-    Contour* contour_create(const double* x, const double* y, size_t n)
-    void contour_free(Contour* contour)
-    
-    # Fonctions Fourier (OpenBLAS)
-    int fourier_coefficients_openblas(const Contour* contour, 
-                                      double_complex* coefficients,
-                                      int n_coefficients)
-    int normalize_descriptors_openblas(const double_complex* coefficients,
-                                       int n_coefficients,
-                                       double* descriptors)
-    
-    # Fonctions batch
-    double_complex* precompute_dft_matrix(int n_points, int n_coeffs)
-    void fourier_batch_gemm(const double_complex* contours_batch,
-                           int batch_size,
-                           int n_points,
-                           const double_complex* dft_matrix,
-                           int n_coeffs,
-                           double_complex* output_coeffs)
-    void free_dft_matrix(double_complex* matrix)
-    
-    # Distance/norms
-    double distance_openblas(const double* desc1, const double* desc2, int n)
-    double norm_openblas(const double* x, int n)
 
 
 cdef class FourierWrapper:
-    """Wrapper Cython pour les descripteurs de Fourier."""
+    """Wrapper Cython simplifié."""
     
     cdef public bint use_openblas
     
     def __init__(self, use_openblas=True):
         self.use_openblas = use_openblas
+        if use_openblas:
+            print("✓ Wrapper Cython chargé (batch FFT vectorisé)")
     
     def compute_descriptors(self, np.ndarray[np.float64_t, ndim=2] contour, 
                            int n_coefficients=32):
         """
-        Calcule les descripteurs de Fourier d'un contour.
-        
-        Args:
-            contour: Array numpy (N, 2) avec points (x, y)
-            n_coefficients: Nombre de coefficients
-            
-        Returns:
-            Array numpy des descripteurs normalisés
+        Calcule descripteurs via NumPy FFT (optimisé).
         """
-        cdef int n_points = contour.shape[0]
-        cdef np.ndarray[np.float64_t, ndim=1] x = np.ascontiguousarray(contour[:, 0])
-        cdef np.ndarray[np.float64_t, ndim=1] y = np.ascontiguousarray(contour[:, 1])
+        cdef int N = contour.shape[0]
+        cdef np.ndarray[np.complex128_t, ndim=1] z
+        cdef np.ndarray[np.complex128_t, ndim=1] coefficients
+        cdef np.ndarray[np.float64_t, ndim=1] magnitudes
+        cdef np.ndarray[np.float64_t, ndim=1] descriptors
+        cdef int center, half_n, center_idx
+        cdef double total_magnitude
         
-        # Créer le contour C
-        cdef Contour* c_contour = contour_create(&x[0], &y[0], n_points)
-        
-        # Allouer coefficients et descripteurs
-        cdef np.ndarray[np.complex128_t, ndim=1] coefficients = np.zeros(n_coefficients + 1, dtype=np.complex128)
-        cdef np.ndarray[np.float64_t, ndim=1] descriptors = np.zeros(n_coefficients, dtype=np.float64)
-        
-        cdef int n_desc
-        
-        try:
-            if self.use_openblas:
-                fourier_coefficients_openblas(c_contour, 
-                                              <double_complex*>&coefficients[0],
-                                              n_coefficients)
-                n_desc = normalize_descriptors_openblas(<double_complex*>&coefficients[0],
-                                                        n_coefficients + 1,
-                                                        &descriptors[0])
-            else:
-                # Fallback Python
-                return self._compute_python(contour, n_coefficients)
-            
-            return descriptors[:n_desc]
-        finally:
-            contour_free(c_contour)
-    
-    def compute_descriptors_batch(self, list contours_list, int n_coefficients):
-        """
-        Calcule les descripteurs pour un batch de contours (GEMM).
-        
-        Args:
-            contours_list: Liste de contours (N, 2)
-            n_coefficients: Nombre de coefficients
-            
-        Returns:
-            Matrice (BatchSize, n_coefficients)
-        """
-        if not self.use_openblas:
-            # Fallback
-            return np.array([self.compute_descriptors(c, n_coefficients) for c in contours_list])
-        
-        cdef int batch_size = len(contours_list)
-        if batch_size == 0:
-            return np.empty((0, n_coefficients))
-        
-        cdef int n_points = contours_list[0].shape[0]
-        
-        # Préparer input batch
-        cdef np.ndarray[np.complex128_t, ndim=1] input_data = np.zeros(batch_size * n_points, dtype=np.complex128)
-        cdef np.ndarray[np.complex128_t, ndim=1] output_coeffs = np.zeros(batch_size * n_coefficients, dtype=np.complex128)
-        
-        cdef int i
-        cdef np.ndarray[np.float64_t, ndim=2] c
-        
-        for i in range(batch_size):
-            c = contours_list[i]
-            if c.shape[0] != n_points:
-                raise ValueError("Tous les contours doivent avoir la même taille")
-            input_data[i*n_points:(i+1)*n_points] = c[:, 0] + 1j * c[:, 1]
-        
-        # Appeler C (GEMM)
-        cdef double_complex* W_ptr = precompute_dft_matrix(n_points, n_coefficients)
-        
-        try:
-            fourier_batch_gemm(<double_complex*>&input_data[0],
-                              batch_size,
-                              n_points,
-                              W_ptr,
-                              n_coefficients,
-                              <double_complex*>&output_coeffs[0])
-        finally:
-            free_dft_matrix(W_ptr)
-        
-        # Post-traitement (normalisation L1)
-        cdef np.ndarray[np.complex128_t, ndim=2] coeffs_matrix = output_coeffs.reshape(batch_size, n_coefficients)
-        cdef np.ndarray[np.float64_t, ndim=2] magnitudes = np.abs(coeffs_matrix)
-        
-        # Normalisation
-        cdef np.ndarray[np.float64_t, ndim=2] sums = magnitudes.sum(axis=1, keepdims=True)
-        sums[sums < 1e-10] = 1.0
-        
-        return magnitudes / sums
-    
-    def _compute_python(self, contour, n_coefficients):
-        """Fallback Python."""
-        N = len(contour)
+        # Représentation complexe
         z = contour[:, 0] + 1j * contour[:, 1]
+        
+        # FFT (NumPy utilise FFTW ou MKL si disponible)
         coefficients = np.fft.fft(z)
         coefficients = np.fft.fftshift(coefficients) / N
         
+        # Extraire coefficients centraux
         center = N // 2
         half_n = n_coefficients // 2
-        coeffs = coefficients[center - half_n : center + half_n + 1]
+        coefficients = coefficients[center - half_n : center + half_n + 1]
         
-        magnitudes = np.abs(coeffs)
-        center_idx = len(coeffs) // 2
-        mask = np.ones(len(coeffs), dtype=bool)
-        mask[center_idx] = False
+        # Magnitude
+        magnitudes = np.abs(coefficients)
         
-        descriptors = magnitudes[mask]
+        # Exclure C0 (centre)
+        center_idx = len(coefficients) // 2
+        descriptors = np.concatenate([magnitudes[:center_idx], magnitudes[center_idx+1:]])
+        
+        # Normalisation L1
         total_magnitude = np.sum(descriptors)
-        
         if total_magnitude > 1e-10:
             descriptors = descriptors / total_magnitude
         
         return descriptors
     
+    def compute_descriptors_batch(self, list contours_list, int n_coefficients):
+        """
+        Batch processing VECTORISÉ avec NumPy FFT.
+        
+        Cette version utilise np.fft.fft sur axis=1 pour traiter
+        tout le batch en une seule passe (beaucoup plus rapide qu'une boucle).
+        """
+        cdef int batch_size = len(contours_list)
+        cdef int n_points
+        cdef np.ndarray[np.complex128_t, ndim=2] batch_complex
+        cdef np.ndarray[np.complex128_t, ndim=2] batch_fft
+        cdef np.ndarray[np.float64_t, ndim=2] batch_mag
+        cdef np.ndarray[np.float64_t, ndim=2] descriptors_matrix
+        cdef int i, center, half_n, center_idx
+        cdef np.ndarray[np.float64_t, ndim=2] temp_contour
+        
+        if batch_size == 0:
+            return np.empty((0, n_coefficients))
+        
+        # Vérifier tailles
+        n_points = contours_list[0].shape[0]
+        
+        # Stack en matrice (Batch x Points)
+        batch_complex = np.zeros((batch_size, n_points), dtype=np.complex128)
+        for i in range(batch_size):
+            temp_contour = contours_list[i]
+            if temp_contour.shape[0] != n_points:
+                raise ValueError("Tous les contours doivent avoir la même taille")
+            batch_complex[i, :] = temp_contour[:, 0] + 1j * temp_contour[:, 1]
+        
+        # FFT sur axis=1 (vectorisé - traite tout le batch d'un coup!)
+        batch_fft = np.fft.fft(batch_complex, axis=1)
+        batch_fft = np.fft.fftshift(batch_fft, axes=1) / n_points
+        
+        # Extraire coefficients centraux
+        center = n_points // 2
+        half_n = n_coefficients // 2
+        batch_fft = batch_fft[:, center - half_n : center + half_n + 1]
+        
+        # Magnitude
+        batch_mag = np.abs(batch_fft)
+        
+        # Exclure C0
+        center_idx = batch_fft.shape[1] // 2
+        descriptors_matrix = np.hstack([
+            batch_mag[:, :center_idx],
+            batch_mag[:, center_idx+1:]
+        ])
+        
+        # Normalisation L1 par ligne
+        sums = descriptors_matrix.sum(axis=1, keepdims=True)
+        sums[sums < 1e-10] = 1.0
+        
+        return descriptors_matrix / sums
+    
     def compute_distance(self, np.ndarray[np.float64_t, ndim=1] desc1,
                         np.ndarray[np.float64_t, ndim=1] desc2):
-        """Calcule la distance euclidienne."""
-        if not self.use_openblas:
-            return np.linalg.norm(desc1 - desc2)
-        
-        return distance_openblas(&desc1[0], &desc2[0], len(desc1))
+        """Distance euclidienne."""
+        return np.linalg.norm(desc1 - desc2)
