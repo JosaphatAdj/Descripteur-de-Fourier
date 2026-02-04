@@ -35,55 +35,62 @@ def load_image(path: str, grayscale: bool = True) -> np.ndarray:
 def binarize_image(img: np.ndarray, method: str = 'otsu') -> np.ndarray:
     """
     Binarise une image en niveaux de gris.
+    ADAPTÉ pour des contours fins (LLM-generated) sur fond sombre.
     
     Args:
         img: Image en niveaux de gris
-        method: 'otsu' ou 'adaptive'
+        method: 'otsu', 'adaptive', ou 'canny'
         
     Returns:
         Image binaire (0 ou 255)
     """
-    # Prétraitement: Flou Gaussien pour réduire le bruit
+    # Détecter si c'est déjà une image de contour (très peu de pixels non-noirs)
+    white_ratio = np.mean(img > 20) / np.prod(img.shape)
+    print(f"  DEBUG: Ratio pixels non-noirs = {white_ratio:.3f}")
+    
+    if white_ratio < 0.05:  # Moins de 5% de pixels non-noirs = contour fin
+        print("  DEBUG: Image détectée comme contour fin, traitement minimal")
+        # Seuillage simple sans morphologie agressive
+        _, binary = cv2.threshold(img, 10, 255, cv2.THRESH_BINARY)
+        
+        # Très légère dilatation pour connecter les gaps (1px)
+        kernel = np.ones((2,2), np.uint8)
+        binary = cv2.dilate(binary, kernel, iterations=1)
+        
+        return binary
+    
+    # Cas standard (image avec texture)
     blurred = cv2.GaussianBlur(img, (5, 5), 0)
     
     if method == 'otsu':
-        # Seuillage Otsu
         _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     elif method == 'adaptive':
-        # Seuillage adaptatif
         binary = cv2.adaptiveThreshold(
             blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY, 11, 2
         )
     elif method == 'canny':
-        # Détection de bords Canny (retourne une "image edge", pas binaire pleine)
-        # On utilise une binarisation simple ou automatique
         high_thresh, _ = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         low_thresh = 0.5 * high_thresh
         binary = cv2.Canny(blurred, low_thresh, high_thresh)
-        # Dilater pour fermer les contours Canny
         kernel = np.ones((3,3), np.uint8)
         binary = cv2.dilate(binary, kernel, iterations=1)
     else:
         raise ValueError(f"Méthode inconnue: {method}")
     
-    # Opérations morphologiques pour nettoyer (fermeture)
+    # Opérations morphologiques DOUCES (kernel réduit)
     if method != 'canny':
-        kernel = np.ones((5,5), np.uint8)
-        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-        binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+        kernel = np.ones((3,3), np.uint8)  # Réduit de 5x5 à 3x3
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
 
-    # Inversion automatique : si les bords sont blancs (majorité), c'est que le fond est blanc
-    # cv2.findContours suppose objet blanc sur fond noir
+    # Inversion automatique
     h, w = binary.shape
     mask_border = np.zeros((h, w), dtype=np.uint8)
-    cv2.rectangle(mask_border, (0, 0), (w-1, h-1), 255, thickness=5) # Regarder les 5px du bord
+    cv2.rectangle(mask_border, (0, 0), (w-1, h-1), 255, thickness=5)
     
-    # Calculer la moyenne sur le bord
     mean_border = cv2.mean(binary, mask=mask_border)[0]
     
     if mean_border > 127:
-        # Fond blanc -> Inverser pour avoir fond noir
         binary = cv2.bitwise_not(binary)
     
     return binary
@@ -135,13 +142,27 @@ def extract_contour(binary_img: np.ndarray,
     )
     
     if not contours:
+        print(f"  DEBUG: Aucun contour trouvé dans l'image binaire")
         return None
+    
+    print(f"  DEBUG: {len(contours)} contour(s) trouvé(s)")
     
     if largest_only:
         # Prendre le plus grand contour (la pièce)
         largest = max(contours, key=cv2.contourArea)
+        area = cv2.contourArea(largest)
+        print(f"  DEBUG: Plus grand contour - Area={area:.0f}, Shape={largest.shape}")
+        
         # Convertir de (N, 1, 2) à (N, 2)
-        return largest.squeeze()
+        result = largest.squeeze()
+        print(f"  DEBUG: Après squeeze - Shape={result.shape}")
+        
+        # Vérifier si le squeeze a trop réduit (cas pathologique: contour à 1 point)
+        if result.ndim == 1:
+            print(f"  WARNING: Contour dégénéré (1 seul point ou dimension incorrecte)")
+            return None
+            
+        return result
     else:
         return [c.squeeze() for c in contours]
 
